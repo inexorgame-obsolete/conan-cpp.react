@@ -1,5 +1,5 @@
 from conans import ConanFile, CMake, tools
-
+import os
 
 class CppreactConan(ConanFile):
     name = "cpp.react"
@@ -19,7 +19,7 @@ class CppreactConan(ConanFile):
         self.run("git clone https://github.com/schlangster/cpp.react")
         self.run("cd cpp.react && git checkout legacy1")
         tools.replace_in_file("cpp.react/CMakeLists.txt", "project (CppReact)",
-                              '''project (cppreact)
+                              '''project (CppReact)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()''')
 
@@ -35,7 +35,7 @@ include_directories ("include")''')
         cmake.build()
 
     def package(self):
-        self.copy("*.h", dst="include", src="hello")
+        self.copy("*.h", dst="include", src=os.path.join("cpp.react", "include"))
         self.copy("*cppreact.lib", dst="lib", keep_path=False)
         self.copy("*.dll", dst="bin", keep_path=False)
         self.copy("*.so", dst="lib", keep_path=False)
@@ -43,5 +43,5 @@ include_directories ("include")''')
         self.copy("*.a", dst="lib", keep_path=False)
 
     def package_info(self):
-        self.cpp_info.libs = ["cppreact"]
+        self.cpp_info.libs = ["CppReact"]
 
