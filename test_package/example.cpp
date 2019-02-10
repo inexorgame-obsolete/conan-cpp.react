@@ -5,16 +5,16 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #include <iostream>
+#include <string>
 #include <utility>
-#include <vector>
 
 #include "react/Domain.h"
 #include "react/Signal.h"
 #include "react/Event.h"
-#include "react/Reactor.h"
+#include "react/Observer.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// Example 1 - Creating reactive loops
+/// Example 1 - Reactive class members
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 namespace example1
 {
@@ -22,63 +22,41 @@ namespace example1
     using namespace react;
 
     REACTIVE_DOMAIN(D, sequential)
-    USING_REACTIVE_DOMAIN(D)
 
-    using PointT = pair<int,int>;
-    using PathT  = vector<PointT>;
-
-    vector<PathT> paths;
-
-    EventSourceT<PointT> mouseDown = MakeEventSource<D,PointT>();
-    EventSourceT<PointT> mouseUp   = MakeEventSource<D,PointT>();
-    EventSourceT<PointT> mouseMove = MakeEventSource<D,PointT>();
-
-    ReactorT loop
+    class Shape
     {
-        [&] (ReactorT::Context ctx)
-        {
-            PathT points;
+    public:
+        USING_REACTIVE_DOMAIN(D)
 
-            points.emplace_back(ctx.Await(mouseDown));
+        VarSignalT<int>     Width   = MakeVar<D>(0);
+        VarSignalT<int>     Height  = MakeVar<D>(0);
 
-            ctx.RepeatUntil(mouseUp, [&] {
-                points.emplace_back(ctx.Await(mouseMove));
-            });
+        SignalT<int>        Size    = Width * Height;
 
-            points.emplace_back(ctx.Await(mouseUp));
-
-            paths.push_back(points);
-        }
+        EventSourceT<>      HasMoved = MakeEventSource<D>();
     };
 
     void Run()
     {
-        cout << "Example 1 - Creating reactive loops" << endl;
+        cout << "Example 1 - Reactive class members" << endl;
 
-        mouseDown << PointT( 1,1 );
-        mouseMove << PointT( 2,2 ) << PointT( 3,3 ) << PointT( 4,4 );
-        mouseUp   << PointT( 5,5 );
+        Shape myShape;
 
-        mouseMove << PointT( 999,999 );
+        Observe(myShape.Size, [] (int newValue) {
+            cout << "Size changed to " << newValue << endl;
+        });
 
-        mouseDown << PointT( 10,10 );
-        mouseMove << PointT( 20,20 );
-        mouseUp   << PointT( 30,30 );
-
-        for (const auto& path : paths)
-        {
-            cout << "Path: ";
-            for (const auto& point : path)
-                cout << "(" << point.first << "," << point.second << ")   ";
-            cout << endl;
-        }
+        DoTransaction<D>([&] {
+            myShape.Width  <<= 4;
+            myShape.Height <<= 4; 
+        }); // output: Size changed to 16
 
         cout << endl;
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-/// Example 2 - Creating reactive loops
+/// Example 2 - Signals of references
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 namespace example2
 {
@@ -86,64 +64,112 @@ namespace example2
     using namespace react;
 
     REACTIVE_DOMAIN(D, sequential)
-    USING_REACTIVE_DOMAIN(D)
 
-    using PointT = pair<int,int>;
-    using PathT  = vector<PointT>;
-
-    vector<PathT> paths;
-
-    EventSourceT<PointT> mouseDown = MakeEventSource<D,PointT>();
-    EventSourceT<PointT> mouseUp   = MakeEventSource<D,PointT>();
-    EventSourceT<PointT> mouseMove = MakeEventSource<D,PointT>();
-
-    VarSignalT<int>      counter   = MakeVar<D>(103);
-
-    ReactorT loop
+    class Company
     {
-        [&] (ReactorT::Context ctx)
+    public:
+        const char* Name;
+
+        Company(const char* name) :
+            Name( name )
+        {}
+
+        // Note: To be used as a signal value type,
+        // values of the type must be comparable
+        bool operator==(const Company& other) const
         {
-            PathT points;
-
-            points.emplace_back(ctx.Await(mouseDown));
-
-            auto count = ctx.Get(counter);
-
-            ctx.RepeatUntil(mouseUp, [&] {
-                points.emplace_back(ctx.Await(mouseMove));
-            });
-
-            points.emplace_back(ctx.Await(mouseUp));
-
-            paths.push_back(points);
+            return this == &other;
         }
+    };
+
+    class Employee
+    {
+    public:
+        USING_REACTIVE_DOMAIN(D)
+
+        VarSignalT<Company&> MyCompany;
+
+        Employee(Company& company) :
+            MyCompany( MakeVar<D>(ref(company)) )
+        {}
     };
 
     void Run()
     {
-        cout << "Example 2 - Creating reactive loops" << endl;
+        cout << "Example 2 - Signals of references" << endl;
 
-        mouseDown << PointT( 1,1 );
-        mouseMove << PointT( 2,2 ) << PointT( 3,3 ) << PointT( 4,4 );
-        mouseUp   << PointT( 5,5 );
+        Company     company1( "MetroTec" );
+        Company     company2( "ACME" );
 
-        counter <<= 42;
+        Employee    bob( company1 );
 
-        mouseMove << PointT( 999,999 );
+        Observe(bob.MyCompany, [] (const Company& company) {
+            cout << "Bob works for " << company.Name << endl;
+        });
 
-        counter <<= 80;
+        bob.MyCompany <<= ref(company2); // output: Bob now works for ACME
 
-        mouseDown << PointT( 10,10 );
-        mouseMove << PointT( 20,20 );
-        mouseUp   << PointT( 30,30 );
+        cout << endl;
+    }
+}
 
-        for (const auto& path : paths)
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/// Example 3 - Dynamic signal references
+///////////////////////////////////////////////////////////////////////////////////////////////////
+namespace example3
+{
+    using namespace std;
+    using namespace react;
+
+    REACTIVE_DOMAIN(D, sequential)
+
+    class Company
+    {
+    public:
+        USING_REACTIVE_DOMAIN(D)
+
+        VarSignalT<string> Name;
+
+        Company(const char* name) :
+            Name( MakeVar<D>(string( name )) )
+        {}
+
+        bool operator==(const Company& other) const
         {
-            cout << "Path: ";
-            for (const auto& point : path)
-                cout << "(" << point.first << "," << point.second << ")   ";
-            cout << endl;
+            return this == &other;
         }
+    };
+
+    class Employee
+    {
+    public:
+        USING_REACTIVE_DOMAIN(D)
+
+        VarSignalT<Company&> MyCompany;
+
+        Employee(Company& company) :
+            MyCompany( MakeVar<D>(ref(company)) )
+        {}
+    };
+
+    void Run()
+    {
+        cout << "Example 3 - Dynamic signal references" << endl;
+
+        Company     company1( "MetroTec" );
+        Company     company2( "ACME" );
+
+        Employee    alice( company1 );
+
+        auto obs = Observe(
+            REACTIVE_REF(alice.MyCompany, Name),
+            [] (const string& name) {
+                cout << "Alice now works for " << name << endl;
+            });
+
+        company1.Name   <<= string( "ModernTec" );  // output: Alice now works for ModernTec
+        alice.MyCompany <<= ref(company2);          // output: Alice now works for ACME
+        company2.Name   <<= string( "A.C.M.E." );   // output: Alice now works for A.C.M.E.
 
         cout << endl;
     }
@@ -155,7 +181,10 @@ namespace example2
 int main()
 {
     example1::Run();
+
     example2::Run();
+
+    example3::Run();
 
     return 0;
 }
