@@ -16,22 +16,12 @@ class CppreactConan(ConanFile):
     generators = "cmake"
 
     def source(self):
-        self.run("git clone https://github.com/schlangster/cpp.react")
-        self.run("cd cpp.react && git checkout legacy1")
+        self.run("git clone https://github.com/inexorgame/cpp.react --depth 1")
         cmake_file = os.path.join("cpp.react", "CMakeLists.txt")
         tools.replace_in_file(cmake_file, "project (CppReact)",
                               '''project (CppReact)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()''')
-
-        # relax the warning level and add "include" to the list of include dirs
-        tools.replace_in_file(cmake_file, 'set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wpedantic")',
-                              '''set(CMAKE_CXX_STANDARD 17)
-include_directories ("include")''')
-        # fix a bug in cpp.react..
-        tools.replace_in_file(os.path.join("cpp.react", "src", "logging", "EventLog.cpp"),
-                              'std::chrono::system_clock::now()',
-                              'std::chrono::high_resolution_clock::now()')
 
     def build(self):
         cmake = CMake(self)
